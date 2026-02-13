@@ -176,7 +176,11 @@ fun GameContent(
             }
         }
 
-        val currentWord = selectedIndicesState.value.map { level.letters[it] }.joinToString("")
+        // Replace unsafe mapping with a filtered-safe version to avoid IndexOutOfBounds
+        val currentWord = selectedIndicesState.value
+            .filter { it >= 0 && it < level.letters.size }
+            .map { level.letters[it] }
+            .joinToString("")
 
         Surface(
             modifier = Modifier.padding(16.dp),
@@ -221,7 +225,10 @@ fun GameContent(
                             }
                         },
                         onDragEnd = {
-                            val finalWord = selectedIndicesState.value.map { level.letters[it] }.joinToString("")
+                            val finalWord = selectedIndicesState.value
+                                .filter { it >= 0 && it < level.letters.size }
+                                .map { level.letters[it] }
+                                .joinToString("")
                             if (finalWord.isNotEmpty()) {
                                 onWordSubmitted(finalWord)
                             }
@@ -236,10 +243,16 @@ fun GameContent(
                 },
             contentAlignment = Alignment.TopStart
         ) {
+            // Limpiar índices inválidos ANTES de usarlos
+            val validIndices = selectedIndicesState.value.filter { it < level.letters.size }
+            if (validIndices.size != selectedIndicesState.value.size) {
+                selectedIndicesState.value = validIndices
+            }
+
             val lineColor = Color.White // Blanco sólido para máximo contraste
 
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val currentIndices = selectedIndicesState.value
+                val currentIndices = validIndices
                 if (currentIndices.isNotEmpty()) {
                     for (i in 0 until currentIndices.size - 1) {
                         val start = letterPositions[currentIndices[i]] ?: Offset.Zero
@@ -276,7 +289,7 @@ fun GameContent(
                 val x = (radiusPx * cos(angle)).toFloat() + centerPx
                 val y = (radiusPx * sin(angle)).toFloat() + centerPx
 
-                val isSelected = selectedIndicesState.value.contains(index)
+                val isSelected = validIndices.contains(index)
                 val center = Offset(x, y)
                 letterPositions[index] = center
 
@@ -303,12 +316,6 @@ fun GameContent(
                         color = if (isSelected) Color.Black else Color.White
                     )
                 }
-            }
-
-            // Limpiar índices inválidos si letters cambió de tamaño
-            val validIndices = selectedIndicesState.value.filter { it < letters.size }
-            if (validIndices.size != selectedIndicesState.value.size) {
-                selectedIndicesState.value = validIndices
             }
         }
 
