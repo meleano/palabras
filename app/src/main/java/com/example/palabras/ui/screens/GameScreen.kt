@@ -153,13 +153,14 @@ fun GameContent(
     var currentTouchPosition by remember { mutableStateOf<Offset?>(null) }
     val density = LocalDensity.current
     val letterPositions = remember { mutableStateMapOf<Int, Offset>() }
+    var showTargetWords by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 80.dp),
             contentPadding = PaddingValues(horizontal = 16.dp),
@@ -168,7 +169,7 @@ fun GameContent(
             items(level.targetWords) { word ->
                 val hintLength = revealedHints[word] ?: 0
                 WordItem(
-                    word = word, 
+                    word = word,
                     isFound = foundWords.contains(word),
                     hintText = if (hintLength > 0) word.substring(0, hintLength) else ""
                 )
@@ -236,7 +237,7 @@ fun GameContent(
             contentAlignment = Alignment.TopStart
         ) {
             val lineColor = Color.White // Blanco sólido para máximo contraste
-            
+
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val currentIndices = selectedIndicesState.value
                 if (currentIndices.isNotEmpty()) {
@@ -251,7 +252,7 @@ fun GameContent(
                             cap = StrokeCap.Round
                         )
                     }
-                    
+
                     currentTouchPosition?.let { touch ->
                         val start = letterPositions[currentIndices.last()] ?: Offset.Zero
                         drawLine(
@@ -267,30 +268,30 @@ fun GameContent(
 
             val letters = level.letters
             val radiusPx = with(density) { 110.dp.toPx() }
-            val centerPx = with(density) { 140.dp.toPx() } 
+            val centerPx = with(density) { 140.dp.toPx() }
             val letterRadiusPx = with(density) { 28.dp.toPx() }
-            
+
             letters.forEachIndexed { index, char ->
                 val angle = (2 * Math.PI * index / letters.size) - Math.PI / 2
                 val x = (radiusPx * cos(angle)).toFloat() + centerPx
                 val y = (radiusPx * sin(angle)).toFloat() + centerPx
-                
+
                 val isSelected = selectedIndicesState.value.contains(index)
                 val center = Offset(x, y)
                 letterPositions[index] = center
 
                 Box(
                     modifier = Modifier
-                        .offset { 
+                        .offset {
                             IntOffset(
-                                (x - letterRadiusPx).toInt(), 
+                                (x - letterRadiusPx).toInt(),
                                 (y - letterRadiusPx).toInt()
-                            ) 
+                            )
                         }
                         .size(60.dp)
                         .clip(CircleShape)
                         .background(
-                            if (isSelected) Color.White 
+                            if (isSelected) Color.White
                             else Color.Black.copy(alpha = 0.6f)
                         ),
                     contentAlignment = Alignment.Center
@@ -304,8 +305,59 @@ fun GameContent(
                 }
             }
         }
+
+        // Botón temporal de depuración "Rendición"
+        if (showTargetWords) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .padding(8.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFFFEBEE),
+                tonalElevation = 4.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "📋 PALABRAS OBJETIVO (DEBUG)",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFC62828)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    level.targetWords.forEach { word ->
+                        Text(
+                            text = "• $word",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF1565C0),
+                            modifier = Modifier.padding(4.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Button(
+            onClick = { showTargetWords = !showTargetWords },
+            modifier = Modifier
+                .padding(8.dp)
+                .fillMaxWidth(0.6f),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (showTargetWords) Color(0xFFC62828) else Color(0xFFF57C00)
+            ),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Text(
+                text = if (showTargetWords) "Ocultar Palabras 👻" else "🏳️ Rendición (DEBUG)",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
         
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(8.dp))
     }
 }
 
