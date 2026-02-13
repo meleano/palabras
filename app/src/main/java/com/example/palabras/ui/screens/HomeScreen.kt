@@ -11,7 +11,8 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun HomeScreen(
-    onStartGame: () -> Unit,
+    onNewGame: () -> Unit,
+    onContinueGame: () -> Unit,
     onViewStats: () -> Unit
 ) {
     Column(
@@ -29,11 +30,19 @@ fun HomeScreen(
         )
         Spacer(modifier = Modifier.height(48.dp))
         Button(
-            onClick = onStartGame,
+            onClick = onNewGame,
             modifier = Modifier.fillMaxWidth(0.7f),
             shape = MaterialTheme.shapes.medium
         ) {
-            Text("Jugar", fontSize = 20.sp)
+            Text("Nueva partida", fontSize = 20.sp)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = onContinueGame,
+            modifier = Modifier.fillMaxWidth(0.7f),
+            shape = MaterialTheme.shapes.medium
+        ) {
+            Text("Continuar partida", fontSize = 16.sp)
         }
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedButton(

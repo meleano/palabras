@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.text.Normalizer
 
 class GameViewModel(
     private val dictionaryRepository: DictionaryRepository,
@@ -59,6 +60,26 @@ class GameViewModel(
         }
     }
 
+    fun startNewGame() {
+        viewModelScope.launch {
+            val dict = dictionaryRepository.loadDictionary()
+            val stats = userStats.value
+            withContext(Dispatchers.Default) {
+                val generated = WordGenerator.generateLevel(stats.levelsCompleted + 1, dict)
+                withContext(Dispatchers.Main) {
+                    applyNewLevel(generated)
+                }
+            }
+        }
+    }
+
+    fun continueGame() {
+        // Solo reaplicar el nivel actual si existe, o cargar uno nuevo si no
+        currentLevel?.let {
+            _uiState.value = GameUiState.Success(it)
+        } ?: run { loadGame() }
+    }
+
     private fun applyNewLevel(level: Level) {
         currentLevel = level
         foundWords.value = emptySet()
@@ -71,92 +92,106 @@ class GameViewModel(
         // Mantener para compatibilidad; la generación real ahora se hace en loadGame
     }
 
+    private fun normalize(s: String): String {
+        val lower = s.lowercase()
+        val n = Normalizer.normalize(lower, Normalizer.Form.NFD)
+        return n.replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+    }
+
     fun onWordSubmitted(word: String) {
         val level = currentLevel ?: return
-        val normalizedWord = word.lowercase()
-        
+        val normalizedWord = normalize(word)
+
+        // targetWords in Level are normalized by generator
         if (level.targetWords.contains(normalizedWord)) {
-            if (!foundWords.value.contains(normalizedWord)) {
-                val newFoundWords = foundWords.value + normalizedWord
-                foundWords.value = newFoundWords
-                
-                viewModelScope.launch {
-                    val stats = userStats.value
-                    userStatsRepository.updateUserStats(stats.copy(
-                        wordsFound = stats.wordsFound + 1,
-                        totalScore = stats.totalScore + 10
-                    ))
-                }
-                
-                if (newFoundWords.size == level.targetWords.size) {
-                    onLevelComplete()
-                }
-            }
-        } else if (dictionaryRepository.isWordValid(normalizedWord)) {
-            viewModelScope.launch {
-                val stats = userStats.value
-                userStatsRepository.updateUserStats(stats.copy(
-                    extraWordsFound = stats.extraWordsFound + 1,
-                    totalScore = stats.totalScore + 5
-                ))
-            }
-        }
-    }
+             if (!foundWords.value.contains(normalizedWord)) {
+                 val newFoundWords = foundWords.value + normalizedWord
+                 foundWords.value = newFoundWords
 
-    fun getHint() {
-        val level = currentLevel ?: return
-        val stats = userStats.value
-        if (stats.totalScore < 20) return // Coste de la ayuda
+                 viewModelScope.launch {
+                     val stats = userStats.value
+                     userStatsRepository.updateUserStats(stats.copy(
+                         wordsFound = stats.wordsFound + 1,
+                         totalScore = stats.totalScore + 10
+                     ))
+                 }
 
-        // Buscar la primera palabra no encontrada
-        val nextWord = level.targetWords.firstOrNull { !foundWords.value.contains(it) }
-        
-        if (nextWord != null) {
-            viewModelScope.launch {
-                userStatsRepository.updateUserStats(stats.copy(
-                    totalScore = stats.totalScore - 20
-                ))
-                // Revelar la primera letra (puedes ampliar esto para revelar más)
-                _revealedHints.value = _revealedHints.value + (nextWord to 1)
-            }
-        }
-    }
+                 if (newFoundWords.size == level.targetWords.size) {
+                     onLevelComplete()
+                 }
+             }
+         } else if (dictionaryRepository.isWordValid(normalizedWord)) {
+             viewModelScope.launch {
+                 val stats = userStats.value
+                 userStatsRepository.updateUserStats(stats.copy(
+                     extraWordsFound = stats.extraWordsFound + 1,
+                     totalScore = stats.totalScore + 5
+                 ))
+             }
+         }
+     }
 
-    private fun onLevelComplete() {
-        viewModelScope.launch {
-            val stats = userStats.value
-            val newStats = stats.copy(
-                levelsCompleted = stats.levelsCompleted + 1,
-                totalScore = stats.totalScore + 50
-            )
-            userStatsRepository.updateUserStats(newStats)
-            // Generar siguiente nivel usando WordGenerator
-            val dict = dictionaryRepository.loadDictionary()
-            withContext(Dispatchers.Default) {
-                val generated = WordGenerator.generateLevel(newStats.levelsCompleted + 1, dict)
-                withContext(Dispatchers.Main) {
-                    applyNewLevel(generated)
-                }
-            }
-        }
-    }
-}
+     fun getHint() {
+         val level = currentLevel ?: return
+         val stats = userStats.value
+         // Coste por letra revelada
+         val costPerLetter = 20
+         // Buscar la primera palabra no encontrada
+         val nextWord = level.targetWords.firstOrNull { !foundWords.value.contains(it) }
+         if (nextWord == null) return
 
-sealed class GameUiState {
-    object Loading : GameUiState()
-    data class Success(val level: Level) : GameUiState()
-    data class Error(val message: String) : GameUiState()
-}
+         val currentRevealed = _revealedHints.value[nextWord] ?: 0
+         if (currentRevealed >= nextWord.length) return // ya revelada completamente
 
-class GameViewModelFactory(
-    private val dictionaryRepository: DictionaryRepository,
-    private val userStatsRepository: UserStatsRepository
-) : ViewModelProvider.Factory {
-    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(GameViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return GameViewModel(dictionaryRepository, userStatsRepository) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
-    }
-}
+         // Verificar puntos
+         if (stats.totalScore < costPerLetter) return
+
+         viewModelScope.launch {
+             // descontar puntos
+             userStatsRepository.updateUserStats(stats.copy(
+                 totalScore = stats.totalScore - costPerLetter
+             ))
+
+             // aumentar contador de letras reveladas
+             _revealedHints.value = _revealedHints.value + (nextWord to (currentRevealed + 1))
+         }
+     }
+
+     private fun onLevelComplete() {
+         viewModelScope.launch {
+             val stats = userStats.value
+             val newStats = stats.copy(
+                 levelsCompleted = stats.levelsCompleted + 1,
+                 totalScore = stats.totalScore + 50
+             )
+             userStatsRepository.updateUserStats(newStats)
+             // Generar siguiente nivel usando WordGenerator
+             val dict = dictionaryRepository.loadDictionary()
+             withContext(Dispatchers.Default) {
+                 val generated = WordGenerator.generateLevel(newStats.levelsCompleted + 1, dict)
+                 withContext(Dispatchers.Main) {
+                     applyNewLevel(generated)
+                 }
+             }
+         }
+     }
+ }
+
+ sealed class GameUiState {
+     object Loading : GameUiState()
+     data class Success(val level: Level) : GameUiState()
+     data class Error(val message: String) : GameUiState()
+ }
+
+ class GameViewModelFactory(
+     private val dictionaryRepository: DictionaryRepository,
+     private val userStatsRepository: UserStatsRepository
+ ) : ViewModelProvider.Factory {
+     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+         if (modelClass.isAssignableFrom(GameViewModel::class.java)) {
+             @Suppress("UNCHECKED_CAST")
+             return GameViewModel(dictionaryRepository, userStatsRepository) as T
+         }
+         throw IllegalArgumentException("Unknown ViewModel class")
+     }
+ }

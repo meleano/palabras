@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.text.Normalizer
 
 class DictionaryRepository(private val context: Context) {
     private var dictionary: Set<String> = emptySet()
@@ -17,7 +18,9 @@ class DictionaryRepository(private val context: Context) {
             val jsonArray = jsonObject.getJSONArray("palabras")
             val words = mutableSetOf<String>()
             for (i in 0 until jsonArray.length()) {
-                words.add(jsonArray.getString(i))
+                val raw = jsonArray.getString(i)
+                val norm = normalize(raw)
+                words.add(norm)
             }
             dictionary = words
             dictionary
@@ -28,6 +31,12 @@ class DictionaryRepository(private val context: Context) {
     }
 
     fun isWordValid(word: String): Boolean {
-        return dictionary.contains(word.lowercase())
+        return dictionary.contains(normalize(word))
+    }
+
+    private fun normalize(s: String): String {
+        val lower = s.lowercase()
+        val n = Normalizer.normalize(lower, Normalizer.Form.NFD)
+        return n.replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
     }
 }

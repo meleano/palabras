@@ -39,7 +39,14 @@ fun PalabrasApp(gameViewModel: GameViewModel, app: PalabrasApplication) {
     NavHost(navController = navController, startDestination = "home") {
         composable("home") {
             HomeScreen(
-                onStartGame = { navController.navigate("game") },
+                onNewGame = {
+                    gameViewModel.startNewGame()
+                    navController.navigate("game")
+                },
+                onContinueGame = {
+                    // continuar la partida actual (no reset)
+                    navController.navigate("game")
+                },
                 onViewStats = { navController.navigate("stats") }
             )
         }
