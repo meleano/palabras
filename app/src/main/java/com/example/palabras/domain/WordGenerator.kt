@@ -23,7 +23,6 @@ object WordGenerator {
 
     fun generateLevel(levelNumber: Int, dictionary: Set<String>, config: Config = Config()): Level {
         if (dictionary.isEmpty()) {
-            // Fallback sencillo si no hay diccionario: letras y palabras fijas
             val fallbackLetters = listOf('p', 'e', 'r', 'r', 'o', 's')
             val fallbackWords = listOf("perro", "pero", "repro", "erró")
             val grid = listOf(
@@ -36,36 +35,32 @@ object WordGenerator {
         val dictLower = dictionary.map { it.lowercase() }.toSet()
         val alphabet = buildAlphabetFromDictionary(dictLower)
 
-        // Calcular rango de palabras según nivel
-        // Nivel N: palabras de N+2 a N+3 letras
-        val wordLenMin = levelNumber + 2
+        // Rango flexible según nivel
+        // Nivel 1-3: N+2 a N+3
+        // Nivel N>3: N a N+3
+        val wordLenMin = if (levelNumber <= 3) levelNumber + 2 else levelNumber
         val wordLenMax = levelNumber + 3
 
-        // Letras ofrecidas: N+2 o N+3
         val lettersCount = Random.nextInt(levelNumber + 2, levelNumber + 4)
 
         var bestLetters: List<Char> = emptyList()
         var bestValidWords: List<String> = emptyList()
 
         var attempts = 0
-        val maxAttempts = 50  // Reducido de 200 para más velocidad
+        val maxAttempts = 200
 
         while (attempts < maxAttempts) {
             attempts++
             val letters = generateRandomLetters(alphabet, lettersCount)
             val validWordsAll = wordsFromLetters(dictLower, letters)
-
-            // Filtrar por longitud específica del nivel
             val validWords = validWordsAll.filter { it.length in wordLenMin..wordLenMax }
 
-            // Si encontramos suficientes palabras, terminar inmediatamente
             if (validWords.size >= 4) {
                 bestLetters = letters
-                bestValidWords = validWords
+                bestValidWords = selectDiverseWords(validWords, 4)
                 break
             }
 
-            // Mantener lo mejor encontrado
             if (validWords.size > bestValidWords.size) {
                 bestValidWords = validWords
                 bestLetters = letters
@@ -82,28 +77,14 @@ object WordGenerator {
 
         val validWordsFinal = validWordsFinalAll.filter { it.length in wordLenMin..wordLenMax }
 
-        // Determinar dificultad
         val difficulty = when {
             validWordsFinal.size >= 15 -> "fácil"
             validWordsFinal.size >= 8 -> "medio"
             else -> "difícil"
         }
 
-        // Elegir palabras objetivo: 4 palabras
-        // Priorizar: 1-2 largas (N+3), 2-3 cortas (N+2 o incluso N+1)
-        val longWords = validWordsFinal.filter { it.length == wordLenMax }.sortedByDescending { it }
-        val shortWords = validWordsFinal.filter { it.length < wordLenMax }.sortedBy { it }
+        val finalTargetWords = selectDiverseWords(validWordsFinal, 4)
 
-        val targetWords = mutableListOf<String>()
-        // Añadir 1-2 palabras largas
-        targetWords.addAll(longWords.take(2))
-        // Rellenar con palabras cortas hasta 4
-        targetWords.addAll(shortWords.take(4 - targetWords.size))
-
-        // Si no hay suficientes, devolver lo que tenemos
-        val finalTargetWords = targetWords.distinct().take(4)
-
-        // Crear grid simple
         val grid = mutableListOf<GridWord>()
         finalTargetWords.forEachIndexed { idx, w ->
             val gw = when (idx % 2) {
@@ -114,6 +95,30 @@ object WordGenerator {
         }
 
         return Level(levelNumber, finalLetters.shuffled(), finalTargetWords, grid, difficulty = difficulty)
+    }
+
+    private fun selectDiverseWords(words: List<String>, count: Int): List<String> {
+        if (words.size <= count) return words.distinct()
+
+        val selected = mutableListOf<String>()
+        val remaining = words.toMutableList()
+
+        remaining.sortByDescending { it.length }
+
+        while (selected.size < count && remaining.isNotEmpty()) {
+            val word = remaining.removeAt(0)
+
+            val prefix = word.substring(0, minOf(3, word.length))
+            val hasSimilarPrefix = selected.any {
+                it.substring(0, minOf(3, it.length)) == prefix
+            }
+
+            if (!hasSimilarPrefix || selected.size < 2) {
+                selected.add(word)
+            }
+        }
+
+        return selected.distinct()
     }
 
     private fun buildAlphabetFromDictionary(dictionary: Set<String>): List<Char> {

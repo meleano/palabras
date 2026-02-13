@@ -304,6 +304,12 @@ fun GameContent(
                     )
                 }
             }
+
+            // Limpiar índices inválidos si letters cambió de tamaño
+            val validIndices = selectedIndicesState.value.filter { it < letters.size }
+            if (validIndices.size != selectedIndicesState.value.size) {
+                selectedIndicesState.value = validIndices
+            }
         }
 
         // Botón temporal de depuración "Rendición"
