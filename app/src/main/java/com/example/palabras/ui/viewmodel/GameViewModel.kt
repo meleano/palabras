@@ -48,38 +48,48 @@ class GameViewModel(
 
     private fun loadGame() {
         viewModelScope.launch {
-            val dict = dictionaryRepository.loadDictionary()
-            val stats = userStatsRepository.getUserStats().first() ?: UserStats()
-            // Generar nivel según currentLevel (no levelsCompleted históricos)
-            withContext(Dispatchers.Default) {
-                val generated = WordGenerator.generateLevel(stats.currentLevel, dict)
-                withContext(Dispatchers.Main) {
-                    applyNewLevel(generated)
+            try {
+                val dict = dictionaryRepository.loadDictionary()
+                val stats = userStatsRepository.getUserStats().first() ?: UserStats()
+                // Generar nivel según currentLevel (no levelsCompleted históricos)
+                withContext(Dispatchers.Default) {
+                    val generated = WordGenerator.generateLevel(stats.currentLevel, dict)
+                    withContext(Dispatchers.Main) {
+                        applyNewLevel(generated)
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e("GameViewModel", "Error loading game", e)
+                _uiState.value = GameUiState.Error("Error al cargar el juego: ${e.message}")
             }
         }
     }
 
     fun startNewGame() {
         viewModelScope.launch {
-            val dict = dictionaryRepository.loadDictionary()
-            val currentStats = userStats.value
-            // Guardar datos históricos antes de resetear
-            val newStats = currentStats.copy(
-                currentScore = 0,
-                currentLevel = 1,
-                currentWordsFound = 0,
-                currentExtraWordsFound = 0
-                // totalScore, totalLevelsCompleted se mantienen del histórico
-            )
-            userStatsRepository.updateUserStats(newStats)
+            try {
+                val dict = dictionaryRepository.loadDictionary()
+                val currentStats = userStats.value
+                // Guardar datos históricos antes de resetear
+                val newStats = currentStats.copy(
+                    currentScore = 0,
+                    currentLevel = 1,
+                    currentWordsFound = 0,
+                    currentExtraWordsFound = 0
+                    // totalScore, totalLevelsCompleted se mantienen del histórico
+                )
+                userStatsRepository.updateUserStats(newStats)
 
-            // Generar nivel 1 con palabras de 3-4 letras
-            withContext(Dispatchers.Default) {
-                val generated = WordGenerator.generateLevel(1, dict)
-                withContext(Dispatchers.Main) {
-                    applyNewLevel(generated)
+                // Generar nivel 1 con palabras de 3-4 letras
+                withContext(Dispatchers.Default) {
+                    val generated = WordGenerator.generateLevel(1, dict)
+                    withContext(Dispatchers.Main) {
+                        applyNewLevel(generated)
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e("GameViewModel", "Error starting new game", e)
+                _uiState.value = GameUiState.Error("Error al iniciar nueva partida: ${e.message}")
             }
         }
     }
@@ -172,25 +182,31 @@ class GameViewModel(
 
      private fun onLevelComplete() {
          viewModelScope.launch {
-             val stats = userStats.value
-             val bonusPerLevel = 50
-             val newStats = stats.copy(
-                 currentLevel = stats.currentLevel + 1,
-                 currentScore = stats.currentScore + bonusPerLevel,
-                 totalLevelsCompleted = stats.totalLevelsCompleted + 1,
-                 totalScore = stats.totalScore + bonusPerLevel
-             )
-             userStatsRepository.updateUserStats(newStats)
+             try {
+                 val stats = userStats.value
+                 val bonusPerLevel = 50
+                 val newStats = stats.copy(
+                     currentLevel = stats.currentLevel + 1,
+                     currentScore = stats.currentScore + bonusPerLevel,
+                     totalLevelsCompleted = stats.totalLevelsCompleted + 1,
+                     totalScore = stats.totalScore + bonusPerLevel
+                 )
+                 userStatsRepository.updateUserStats(newStats)
 
-             val dict = dictionaryRepository.loadDictionary()
-             withContext(Dispatchers.Default) {
-                 val generated = WordGenerator.generateLevel(newStats.currentLevel, dict)
-                 withContext(Dispatchers.Main) {
-                     applyNewLevel(generated)
+                 val dict = dictionaryRepository.loadDictionary()
+                 withContext(Dispatchers.Default) {
+                     val generated = WordGenerator.generateLevel(newStats.currentLevel, dict)
+                     withContext(Dispatchers.Main) {
+                         applyNewLevel(generated)
+                     }
                  }
+             } catch (e: Exception) {
+                 Log.e("GameViewModel", "Error completing level", e)
+                 _uiState.value = GameUiState.Error("Error al completar nivel: ${e.message}")
              }
          }
-     } }
+     }
+ }
 
  sealed class GameUiState {
      object Loading : GameUiState()
