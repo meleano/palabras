@@ -48,7 +48,7 @@ object WordGenerator {
         var bestValidWords: List<String> = emptyList()
 
         var attempts = 0
-        val maxAttempts = 200
+        val maxAttempts = 50  // Reducido de 200 para más velocidad
 
         while (attempts < maxAttempts) {
             attempts++
@@ -58,12 +58,14 @@ object WordGenerator {
             // Filtrar por longitud específica del nivel
             val validWords = validWordsAll.filter { it.length in wordLenMin..wordLenMax }
 
+            // Si encontramos suficientes palabras, terminar inmediatamente
             if (validWords.size >= 4) {
                 bestLetters = letters
                 bestValidWords = validWords
                 break
             }
 
+            // Mantener lo mejor encontrado
             if (validWords.size > bestValidWords.size) {
                 bestValidWords = validWords
                 bestLetters = letters
