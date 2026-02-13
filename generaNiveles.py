@@ -2,14 +2,16 @@ import json
 import random
 from collections import Counter, defaultdict
 
+print("=== INICIO DEL GENERADOR DE NIVELES ===")
+
 DICT_FILE = "dictionary.json"
 OUTPUT_LEVELS = "levels.json"
 
-NUM_LEVELS = 2000
-MIN_WORDS = 8
+NUM_LEVELS = 200
+MIN_WORDS = 5
 MAX_WORDS = 40
 PREFIX_LEN = 2
-MAX_ATTEMPTS_PER_LEVEL = 500
+MAX_ATTEMPTS_PER_LEVEL = 200
 
 LETTER_COUNTS = {
     "fácil": 5,
@@ -31,11 +33,26 @@ def generate_letter_set(n):
 
 # ------------------ carga diccionario ------------------ #
 
-with open(DICT_FILE, "r", encoding="utf8") as f:
-    data = json.load(f)
+print("Cargando dictionary.json...")
 
-WORDS = data["palabras"]
-LEVELS = data["niveles"]
+try:
+    with open(DICT_FILE, "r", encoding="utf8") as f:
+        data = json.load(f)
+except Exception as e:
+    print("ERROR: No se pudo cargar dictionary.json")
+    print(e)
+    exit(1)
+
+WORDS = data.get("palabras", [])
+LEVELS = data.get("niveles", {})
+
+print(f"Palabras cargadas: {len(WORDS)}")
+
+if len(WORDS) == 0:
+    print("ERROR: El diccionario está vacío. No se pueden generar niveles.")
+    exit(1)
+
+# ------------------ índice optimizado ------------------ #
 
 INDEX_BY_LEN = defaultdict(list)
 for w in WORDS:
@@ -96,35 +113,43 @@ def generate_level(target):
 
         difficulty = classify_level(candidates)
 
+        print(f"Nivel generado con letras {letters} ({len(candidates)} palabras)")
         return {
             "letras": letters,
             "palabras": sorted(candidates),
             "dificultad": difficulty
         }
 
-    return None  # no se pudo generar
+    print("AVISO: No se pudo generar un nivel válido tras muchos intentos.")
+    return None
 
 # ------------------ generación masiva ------------------ #
 
-if __name__ == "__main__":
-    levels = []
+levels = []
 
-    for i in range(NUM_LEVELS):
-        target = random.choice(["fácil", "medio", "difícil"])
-        lvl = generate_level(target)
+print("Generando niveles...")
 
-        if lvl is None:
-            print(f"[WARN] No se pudo generar nivel {i+1}, usando fallback.")
-            lvl = {
-                "letras": "AAAAA",
-                "palabras": ["aaa"],
-                "dificultad": "fácil"
-            }
+for i in range(NUM_LEVELS):
+    target = random.choice(["fácil", "medio", "difícil"])
+    lvl = generate_level(target)
 
-        levels.append(lvl)
+    if lvl is None:
+        lvl = {
+            "letras": "AAAAA",
+            "palabras": ["aaa"],
+            "dificultad": "fácil"
+        }
 
+    levels.append(lvl)
+
+print("Guardando levels.json...")
+
+try:
     with open(OUTPUT_LEVELS, "w", encoding="utf8") as f:
         json.dump(levels, f, ensure_ascii=False, indent=2)
+    print("levels.json creado correctamente.")
+except Exception as e:
+    print("ERROR al guardar levels.json:")
+    print(e)
 
-    print(f"Niveles generados: {len(levels)}")
-    print(f"Archivo guardado: {OUTPUT_LEVELS}")
+print("=== FIN DEL GENERADOR ===")
