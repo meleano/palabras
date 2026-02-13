@@ -16,6 +16,8 @@ object WordGenerator {
         val lettersMax: Int = 10,
         val minValidWordsForAccept: Int = 10,
         val desiredTargetWords: Int = 4,
+        val wordLenMin: Int = 3,
+        val wordLenMax: Int = 10,
         val maxAttempts: Int = 300
     )
 
@@ -28,7 +30,7 @@ object WordGenerator {
                 GridWord(fallbackWords[0], 0, 0, false),
                 GridWord(fallbackWords[1], 0, 0, true)
             )
-            return Level(levelNumber, fallbackLetters, fallbackWords, grid)
+            return Level(levelNumber, fallbackLetters, fallbackWords, grid, difficulty = "medio")
         }
 
         val dictLower = dictionary.map { it.lowercase() }.toSet()
@@ -45,7 +47,9 @@ object WordGenerator {
             val lettersCount = Random.nextInt(config.lettersMin, config.lettersMax + 1)
             val letters = generateRandomLetters(alphabet, lettersCount)
 
-            val validWords = wordsFromLetters(dictLower, letters)
+            val validWordsAll = wordsFromLetters(dictLower, letters)
+            // Filtrar por longitud solicitada
+            val validWords = validWordsAll.filter { it.length in config.wordLenMin..config.wordLenMax }
             if (validWords.size >= requiredValid) {
                 bestLetters = letters
                 bestValidWords = validWords
@@ -70,11 +74,13 @@ object WordGenerator {
             listOf('a', 'e', 'o', 's', 'r', 'l')
         } else bestLetters
 
-        val validWordsFinal = if (bestValidWords.isEmpty()) wordsFromLetters(dictLower, finalLetters) else bestValidWords
+        val validWordsFinalAll = if (bestValidWords.isEmpty()) wordsFromLetters(dictLower, finalLetters) else bestValidWords
+        val validWordsFinal = validWordsFinalAll.filter { it.length in config.wordLenMin..config.wordLenMax }
 
         // Determinar dificultad y elegir targetWords
+        val avgLen = if (validWordsFinal.isNotEmpty()) validWordsFinal.map { it.length }.average() else 0.0
         val difficulty = when {
-            validWordsFinal.size >= 20 -> "fácil"
+            validWordsFinal.size >= 20 && avgLen <= 6 -> "fácil"
             validWordsFinal.size >= 10 -> "medio"
             else -> "difícil"
         }
@@ -93,7 +99,7 @@ object WordGenerator {
             grid.add(gw)
         }
 
-        return Level(levelNumber, finalLetters.shuffled(), targetWords, grid)
+        return Level(levelNumber, finalLetters.shuffled(), targetWords, grid, difficulty = difficulty)
     }
 
     private fun buildAlphabetFromDictionary(dictionary: Set<String>): List<Char> {

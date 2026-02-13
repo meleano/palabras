@@ -4,7 +4,8 @@ data class Level(
     val id: Int,
     val letters: List<Char>,
     val targetWords: List<String>,
-    val grid: List<GridWord>
+    val grid: List<GridWord>,
+    val difficulty: String = "medio"
 )
 
 data class GridWord(

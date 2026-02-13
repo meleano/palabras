@@ -51,8 +51,9 @@ class GameViewModel(
             val dict = dictionaryRepository.loadDictionary()
             val stats = userStatsRepository.getUserStats().first() ?: UserStats()
             // Generar nivel utilizando WordGenerator en IO
+            val config = computeConfigFromStats(stats)
             withContext(Dispatchers.Default) {
-                val generated = WordGenerator.generateLevel(stats.levelsCompleted + 1, dict)
+                val generated = WordGenerator.generateLevel(stats.levelsCompleted + 1, dict, config)
                 withContext(Dispatchers.Main) {
                     applyNewLevel(generated)
                 }
@@ -64,8 +65,9 @@ class GameViewModel(
         viewModelScope.launch {
             val dict = dictionaryRepository.loadDictionary()
             val stats = userStats.value
+            val config = computeConfigFromStats(stats)
             withContext(Dispatchers.Default) {
-                val generated = WordGenerator.generateLevel(stats.levelsCompleted + 1, dict)
+                val generated = WordGenerator.generateLevel(stats.levelsCompleted + 1, dict, config)
                 withContext(Dispatchers.Main) {
                     applyNewLevel(generated)
                 }
@@ -167,12 +169,48 @@ class GameViewModel(
              userStatsRepository.updateUserStats(newStats)
              // Generar siguiente nivel usando WordGenerator
              val dict = dictionaryRepository.loadDictionary()
+             val config = computeConfigFromStats(newStats)
              withContext(Dispatchers.Default) {
-                 val generated = WordGenerator.generateLevel(newStats.levelsCompleted + 1, dict)
+                 val generated = WordGenerator.generateLevel(newStats.levelsCompleted + 1, dict, config)
                  withContext(Dispatchers.Main) {
                      applyNewLevel(generated)
                  }
              }
+         }
+     }
+
+     private fun computeConfigFromStats(stats: UserStats): WordGenerator.Config {
+         // Heurística simple para ajustar dificultad según puntuación media por nivel
+         val avgPerLevel = if (stats.levelsCompleted > 0) stats.totalScore.toDouble() / stats.levelsCompleted else stats.totalScore.toDouble()
+
+         return when {
+             avgPerLevel >= 100 -> WordGenerator.Config(
+                 lettersMin = 7,
+                 lettersMax = 10,
+                 minValidWordsForAccept = 15,
+                 desiredTargetWords = 4,
+                 wordLenMin = 6,
+                 wordLenMax = 10,
+                 maxAttempts = 500
+             )
+             avgPerLevel >= 50 -> WordGenerator.Config(
+                 lettersMin = 6,
+                 lettersMax = 9,
+                 minValidWordsForAccept = 12,
+                 desiredTargetWords = 4,
+                 wordLenMin = 5,
+                 wordLenMax = 9,
+                 maxAttempts = 400
+             )
+             else -> WordGenerator.Config(
+                 lettersMin = 6,
+                 lettersMax = 8,
+                 minValidWordsForAccept = 8,
+                 desiredTargetWords = 4,
+                 wordLenMin = 3,
+                 wordLenMax = 8,
+                 maxAttempts = 300
+             )
          }
      }
  }
