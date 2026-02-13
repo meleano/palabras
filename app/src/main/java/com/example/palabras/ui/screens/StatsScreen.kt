@@ -44,10 +44,19 @@ fun StatsScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Text("PARTIDA ACTUAL", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+            StatItem("Puntuación", stats?.currentScore?.toString() ?: "0")
+            StatItem("Nivel", stats?.currentLevel?.toString() ?: "1")
+            StatItem("Palabras Encontradas", stats?.currentWordsFound?.toString() ?: "0")
+            StatItem("Palabras Extra", stats?.currentExtraWordsFound?.toString() ?: "0")
+
+            Divider(modifier = Modifier.padding(vertical = 16.dp))
+
+            Text("HISTÓRICO ACUMULADO", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
             StatItem("Puntuación Total", stats?.totalScore?.toString() ?: "0")
-            StatItem("Niveles Completados", stats?.levelsCompleted?.toString() ?: "0")
-            StatItem("Palabras Encontradas", stats?.wordsFound?.toString() ?: "0")
-            StatItem("Palabras Extra", stats?.extraWordsFound?.toString() ?: "0")
+            StatItem("Niveles Completados", stats?.totalLevelsCompleted?.toString() ?: "0")
+            StatItem("Palabras Encontradas", stats?.totalWordsFound?.toString() ?: "0")
+            StatItem("Palabras Extra", stats?.totalExtraWordsFound?.toString() ?: "0")
         }
     }
 }

@@ -50,10 +50,9 @@ class GameViewModel(
         viewModelScope.launch {
             val dict = dictionaryRepository.loadDictionary()
             val stats = userStatsRepository.getUserStats().first() ?: UserStats()
-            // Generar nivel utilizando WordGenerator en IO
-            val config = computeConfigFromStats(stats)
+            // Generar nivel según currentLevel (no levelsCompleted históricos)
             withContext(Dispatchers.Default) {
-                val generated = WordGenerator.generateLevel(stats.levelsCompleted + 1, dict, config)
+                val generated = WordGenerator.generateLevel(stats.currentLevel, dict)
                 withContext(Dispatchers.Main) {
                     applyNewLevel(generated)
                 }
@@ -64,10 +63,20 @@ class GameViewModel(
     fun startNewGame() {
         viewModelScope.launch {
             val dict = dictionaryRepository.loadDictionary()
-            val stats = userStats.value
-            val config = computeConfigFromStats(stats)
+            val currentStats = userStats.value
+            // Guardar datos históricos antes de resetear
+            val newStats = currentStats.copy(
+                currentScore = 0,
+                currentLevel = 1,
+                currentWordsFound = 0,
+                currentExtraWordsFound = 0
+                // totalScore, totalLevelsCompleted se mantienen del histórico
+            )
+            userStatsRepository.updateUserStats(newStats)
+
+            // Generar nivel 1 con palabras de 3-4 letras
             withContext(Dispatchers.Default) {
-                val generated = WordGenerator.generateLevel(stats.levelsCompleted + 1, dict, config)
+                val generated = WordGenerator.generateLevel(1, dict)
                 withContext(Dispatchers.Main) {
                     applyNewLevel(generated)
                 }
@@ -112,9 +121,12 @@ class GameViewModel(
 
                  viewModelScope.launch {
                      val stats = userStats.value
+                     val pointsPerWord = 10
                      userStatsRepository.updateUserStats(stats.copy(
-                         wordsFound = stats.wordsFound + 1,
-                         totalScore = stats.totalScore + 10
+                         currentScore = stats.currentScore + pointsPerWord,
+                         currentWordsFound = stats.currentWordsFound + 1,
+                         totalScore = stats.totalScore + pointsPerWord,
+                         totalWordsFound = stats.totalWordsFound + 1
                      ))
                  }
 
@@ -125,9 +137,12 @@ class GameViewModel(
          } else if (dictionaryRepository.isWordValid(normalizedWord)) {
              viewModelScope.launch {
                  val stats = userStats.value
+                 val pointsPerBonus = 5
                  userStatsRepository.updateUserStats(stats.copy(
-                     extraWordsFound = stats.extraWordsFound + 1,
-                     totalScore = stats.totalScore + 5
+                     currentScore = stats.currentScore + pointsPerBonus,
+                     currentExtraWordsFound = stats.currentExtraWordsFound + 1,
+                     totalScore = stats.totalScore + pointsPerBonus,
+                     totalExtraWordsFound = stats.totalExtraWordsFound + 1
                  ))
              }
          }
@@ -136,25 +151,21 @@ class GameViewModel(
      fun getHint() {
          val level = currentLevel ?: return
          val stats = userStats.value
-         // Coste por letra revelada
          val costPerLetter = 20
-         // Buscar la primera palabra no encontrada
          val nextWord = level.targetWords.firstOrNull { !foundWords.value.contains(it) }
          if (nextWord == null) return
 
          val currentRevealed = _revealedHints.value[nextWord] ?: 0
-         if (currentRevealed >= nextWord.length) return // ya revelada completamente
+         if (currentRevealed >= nextWord.length) return
 
-         // Verificar puntos
-         if (stats.totalScore < costPerLetter) return
+         if (stats.currentScore < costPerLetter) return
 
          viewModelScope.launch {
-             // descontar puntos
              userStatsRepository.updateUserStats(stats.copy(
+                 currentScore = stats.currentScore - costPerLetter,
                  totalScore = stats.totalScore - costPerLetter
              ))
 
-             // aumentar contador de letras reveladas
              _revealedHints.value = _revealedHints.value + (nextWord to (currentRevealed + 1))
          }
      }
@@ -162,58 +173,24 @@ class GameViewModel(
      private fun onLevelComplete() {
          viewModelScope.launch {
              val stats = userStats.value
+             val bonusPerLevel = 50
              val newStats = stats.copy(
-                 levelsCompleted = stats.levelsCompleted + 1,
-                 totalScore = stats.totalScore + 50
+                 currentLevel = stats.currentLevel + 1,
+                 currentScore = stats.currentScore + bonusPerLevel,
+                 totalLevelsCompleted = stats.totalLevelsCompleted + 1,
+                 totalScore = stats.totalScore + bonusPerLevel
              )
              userStatsRepository.updateUserStats(newStats)
-             // Generar siguiente nivel usando WordGenerator
+
              val dict = dictionaryRepository.loadDictionary()
-             val config = computeConfigFromStats(newStats)
              withContext(Dispatchers.Default) {
-                 val generated = WordGenerator.generateLevel(newStats.levelsCompleted + 1, dict, config)
+                 val generated = WordGenerator.generateLevel(newStats.currentLevel, dict)
                  withContext(Dispatchers.Main) {
                      applyNewLevel(generated)
                  }
              }
          }
-     }
-
-     private fun computeConfigFromStats(stats: UserStats): WordGenerator.Config {
-         // Heurística simple para ajustar dificultad según puntuación media por nivel
-         val avgPerLevel = if (stats.levelsCompleted > 0) stats.totalScore.toDouble() / stats.levelsCompleted else stats.totalScore.toDouble()
-
-         return when {
-             avgPerLevel >= 100 -> WordGenerator.Config(
-                 lettersMin = 7,
-                 lettersMax = 10,
-                 minValidWordsForAccept = 15,
-                 desiredTargetWords = 4,
-                 wordLenMin = 6,
-                 wordLenMax = 10,
-                 maxAttempts = 500
-             )
-             avgPerLevel >= 50 -> WordGenerator.Config(
-                 lettersMin = 6,
-                 lettersMax = 9,
-                 minValidWordsForAccept = 12,
-                 desiredTargetWords = 4,
-                 wordLenMin = 5,
-                 wordLenMax = 9,
-                 maxAttempts = 400
-             )
-             else -> WordGenerator.Config(
-                 lettersMin = 6,
-                 lettersMax = 8,
-                 minValidWordsForAccept = 8,
-                 desiredTargetWords = 4,
-                 wordLenMin = 3,
-                 wordLenMax = 8,
-                 maxAttempts = 300
-             )
-         }
-     }
- }
+     } }
 
  sealed class GameUiState {
      object Loading : GameUiState()

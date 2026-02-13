@@ -36,62 +36,74 @@ object WordGenerator {
         val dictLower = dictionary.map { it.lowercase() }.toSet()
         val alphabet = buildAlphabetFromDictionary(dictLower)
 
+        // Calcular rango de palabras según nivel
+        // Nivel N: palabras de N+2 a N+3 letras
+        val wordLenMin = levelNumber + 2
+        val wordLenMax = levelNumber + 3
+
+        // Letras ofrecidas: N+2 o N+3
+        val lettersCount = Random.nextInt(levelNumber + 2, levelNumber + 4)
+
         var bestLetters: List<Char> = emptyList()
         var bestValidWords: List<String> = emptyList()
 
         var attempts = 0
-        var requiredValid = config.minValidWordsForAccept
+        val maxAttempts = 200
 
-        while (attempts < config.maxAttempts) {
+        while (attempts < maxAttempts) {
             attempts++
-            val lettersCount = Random.nextInt(config.lettersMin, config.lettersMax + 1)
             val letters = generateRandomLetters(alphabet, lettersCount)
-
             val validWordsAll = wordsFromLetters(dictLower, letters)
-            // Filtrar por longitud solicitada
-            val validWords = validWordsAll.filter { it.length in config.wordLenMin..config.wordLenMax }
-            if (validWords.size >= requiredValid) {
+
+            // Filtrar por longitud específica del nivel
+            val validWords = validWordsAll.filter { it.length in wordLenMin..wordLenMax }
+
+            if (validWords.size >= 4) {
                 bestLetters = letters
                 bestValidWords = validWords
                 break
             }
 
-            // Keep the best found by size
             if (validWords.size > bestValidWords.size) {
                 bestValidWords = validWords
                 bestLetters = letters
             }
-
-            // If reached many attempts and found nothing, reduce requirement
-            if (attempts % 50 == 0 && requiredValid > 1) {
-                requiredValid = maxOf(1, requiredValid / 2)
-            }
         }
 
-        // Si no encontramos suficientes palabras, usamos lo mejor que haya
         val finalLetters = if (bestLetters.isEmpty()) {
-            // fallback: take some frequent letters
-            listOf('a', 'e', 'o', 's', 'r', 'l')
+            generateRandomLetters(alphabet, lettersCount)
         } else bestLetters
 
-        val validWordsFinalAll = if (bestValidWords.isEmpty()) wordsFromLetters(dictLower, finalLetters) else bestValidWords
-        val validWordsFinal = validWordsFinalAll.filter { it.length in config.wordLenMin..config.wordLenMax }
+        val validWordsFinalAll = if (bestValidWords.isEmpty()) {
+            wordsFromLetters(dictLower, finalLetters)
+        } else bestValidWords
 
-        // Determinar dificultad y elegir targetWords
-        val avgLen = if (validWordsFinal.isNotEmpty()) validWordsFinal.map { it.length }.average() else 0.0
+        val validWordsFinal = validWordsFinalAll.filter { it.length in wordLenMin..wordLenMax }
+
+        // Determinar dificultad
         val difficulty = when {
-            validWordsFinal.size >= 20 && avgLen <= 6 -> "fácil"
-            validWordsFinal.size >= 10 -> "medio"
+            validWordsFinal.size >= 15 -> "fácil"
+            validWordsFinal.size >= 8 -> "medio"
             else -> "difícil"
         }
 
-        // Elegir palabras objetivo: preferir palabras más largas (más desafiantes)
-        val sortedByLength = validWordsFinal.sortedWith(compareByDescending<String> { it.length }.thenBy { it })
-        val targetWords = sortedByLength.take(config.desiredTargetWords).distinct().map { it }
+        // Elegir palabras objetivo: 4 palabras
+        // Priorizar: 1-2 largas (N+3), 2-3 cortas (N+2 o incluso N+1)
+        val longWords = validWordsFinal.filter { it.length == wordLenMax }.sortedByDescending { it }
+        val shortWords = validWordsFinal.filter { it.length < wordLenMax }.sortedBy { it }
 
-        // Crear un ``grid`` simple (puede mejorarse más adelante)
+        val targetWords = mutableListOf<String>()
+        // Añadir 1-2 palabras largas
+        targetWords.addAll(longWords.take(2))
+        // Rellenar con palabras cortas hasta 4
+        targetWords.addAll(shortWords.take(4 - targetWords.size))
+
+        // Si no hay suficientes, devolver lo que tenemos
+        val finalTargetWords = targetWords.distinct().take(4)
+
+        // Crear grid simple
         val grid = mutableListOf<GridWord>()
-        targetWords.forEachIndexed { idx, w ->
+        finalTargetWords.forEachIndexed { idx, w ->
             val gw = when (idx % 2) {
                 0 -> GridWord(w, 0, idx, false)
                 else -> GridWord(w, idx, 0, true)
@@ -99,7 +111,7 @@ object WordGenerator {
             grid.add(gw)
         }
 
-        return Level(levelNumber, finalLetters.shuffled(), targetWords, grid, difficulty = difficulty)
+        return Level(levelNumber, finalLetters.shuffled(), finalTargetWords, grid, difficulty = difficulty)
     }
 
     private fun buildAlphabetFromDictionary(dictionary: Set<String>): List<Char> {

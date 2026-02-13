@@ -54,7 +54,7 @@ fun GameScreen(
         Brush.verticalGradient(listOf(Color(0xFFD7CCC8), Color(0xFF5D4037)))  // Tierra intenso
     )
 
-    val currentGradient = backgroundGradients[(stats.levelsCompleted) % backgroundGradients.size]
+    val currentGradient = backgroundGradients[(stats.currentLevel - 1) % backgroundGradients.size]
 
     Scaffold(
         topBar = {
@@ -63,8 +63,8 @@ fun GameScreen(
                     Column {
                         Text("Palabras", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                         Text(
-                            "Nivel ${stats.levelsCompleted + 1}", 
-                            fontSize = 12.sp, 
+                            "Nivel ${stats.currentLevel}",
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.DarkGray
                         )
@@ -76,7 +76,7 @@ fun GameScreen(
                     }
                 },
                 actions = {
-                    ScoreBadge(score = stats.totalScore)
+                    ScoreBadge(score = stats.currentScore)
                     IconButton(onClick = { viewModel.getHint() }) {
                         Icon(Icons.Default.Lightbulb, contentDescription = "Ayuda", tint = Color(0xFFFBC02D))
                     }
