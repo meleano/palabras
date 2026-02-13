@@ -51,12 +51,12 @@ class GameViewModel(
             try {
                 val dict = dictionaryRepository.loadDictionary()
                 val stats = userStatsRepository.getUserStats().first() ?: UserStats()
-                // Generar nivel según currentLevel (no levelsCompleted históricos)
-                withContext(Dispatchers.Default) {
-                    val generated = WordGenerator.generateLevel(stats.currentLevel, dict)
-                    withContext(Dispatchers.Main) {
-                        applyNewLevel(generated)
-                    }
+                // Generar nivel según currentLevel en background para evitar bloquear la UI
+                val generated = withContext(Dispatchers.Default) {
+                    WordGenerator.generateLevel(stats.currentLevel, dict)
+                }
+                withContext(Dispatchers.Main) {
+                    applyNewLevel(generated)
                 }
             } catch (e: Exception) {
                 Log.e("GameViewModel", "Error loading game", e)
@@ -80,12 +80,12 @@ class GameViewModel(
                 )
                 userStatsRepository.updateUserStats(newStats)
 
-                // Generar nivel 1 con palabras de 3-4 letras
-                withContext(Dispatchers.Default) {
-                    val generated = WordGenerator.generateLevel(1, dict)
-                    withContext(Dispatchers.Main) {
-                        applyNewLevel(generated)
-                    }
+                // Generar nivel 1 en background para no bloquear la UI
+                val generated = withContext(Dispatchers.Default) {
+                    WordGenerator.generateLevel(1, dict)
+                }
+                withContext(Dispatchers.Main) {
+                    applyNewLevel(generated)
                 }
             } catch (e: Exception) {
                 Log.e("GameViewModel", "Error starting new game", e)
@@ -194,9 +194,14 @@ class GameViewModel(
                  userStatsRepository.updateUserStats(newStats)
                  Log.d("GameViewModel", "Nivel completado. Nuevo nivel: ${newStats.currentLevel}")
 
+                 // Generar siguiente nivel en background (Default) y luego aplicar en Main
                  val dict = dictionaryRepository.loadDictionary()
-                 val generated = WordGenerator.generateLevel(newStats.currentLevel, dict)
-                 applyNewLevel(generated)
+                 val generated = withContext(Dispatchers.Default) {
+                     WordGenerator.generateLevel(newStats.currentLevel, dict)
+                 }
+                 withContext(Dispatchers.Main) {
+                     applyNewLevel(generated)
+                 }
              } catch (e: Exception) {
                  Log.e("GameViewModel", "Error completing level", e)
                  _uiState.value = GameUiState.Error("Error al completar nivel: ${e.message}")

@@ -5,6 +5,7 @@ import unicodedata
 import requests
 import pandas as pd
 from collections import Counter, defaultdict
+from wordfreq import word_frequency  # frecuencias por idioma
 
 # ---------------------------------------------------------
 # CONFIGURACIÓN
@@ -15,8 +16,6 @@ OUTPUT_JSON = "dictionary.json"
 OUTPUT_CSV = "dictionary.csv"
 OUTPUT_TXT = "dictionary.txt"
 OUTPUT_STATS = "stats.json"
-
-SUBTLEX_FILE = "subtlex_esp.csv"  # Debe contener columnas: word,freq
 
 CORPUS_URLS = [
     "https://raw.githubusercontent.com/dwyl/spanish-words/master/spanish.txt",
@@ -86,13 +85,19 @@ def normalize_word(word):
 
 
 # ---------------------------------------------------------
-# CLASIFICACIÓN POR FRECUENCIA
+# CLASIFICACIÓN POR FRECUENCIA (usando wordfreq)
 # ---------------------------------------------------------
 
+def get_freq(word):
+    # word_frequency devuelve frecuencia relativa (0–1) en escala logarítmica
+    # multiplicamos para tener algo más legible
+    return word_frequency(word, "es") * 1_000_000
+
+
 def classify(freq):
-    if freq >= 1000:
+    if freq >= 5000:
         return "fácil"
-    elif freq >= 100:
+    elif freq >= 500:
         return "medio"
     else:
         return "difícil"
@@ -105,13 +110,11 @@ def classify(freq):
 def build_dictionary():
     print("\n=== Procesando corpus ===\n")
 
-    # Cargar corpus bruto
     with open(RAW_FILE, "r", encoding="utf8") as f:
         raw_words = [w.strip() for w in f.readlines()]
 
     print(f"Palabras brutas cargadas: {len(raw_words)}")
 
-    # Normalizar
     words = set()
     for w in raw_words:
         norm = normalize_word(w)
@@ -120,16 +123,14 @@ def build_dictionary():
 
     print(f"Palabras tras limpieza mínima: {len(words)}")
 
-    # Cargar frecuencias SUBTLEX
-    freq_df = pd.read_csv(SUBTLEX_FILE)
-    freq_df["word"] = freq_df["word"].str.lower().map(normalize_word)
-    freq_df = freq_df.dropna()
+    # Frecuencias con wordfreq
+    freq_map = {}
+    for w in words:
+        f = get_freq(w)
+        if f > 0:  # filtra palabras totalmente desconocidas
+            freq_map[w] = f
 
-    freq_map = dict(zip(freq_df["word"], freq_df["freq"]))
-
-    # Filtrar palabras raras (sin frecuencia)
-    filtered = [w for w in words if w in freq_map]
-
+    filtered = list(freq_map.keys())
     print(f"Palabras con frecuencia conocida: {len(filtered)}")
 
     # Clasificación por niveles
