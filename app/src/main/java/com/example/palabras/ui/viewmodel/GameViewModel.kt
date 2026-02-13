@@ -192,14 +192,11 @@ class GameViewModel(
                      totalScore = stats.totalScore + bonusPerLevel
                  )
                  userStatsRepository.updateUserStats(newStats)
+                 Log.d("GameViewModel", "Nivel completado. Nuevo nivel: ${newStats.currentLevel}")
 
                  val dict = dictionaryRepository.loadDictionary()
-                 withContext(Dispatchers.Default) {
-                     val generated = WordGenerator.generateLevel(newStats.currentLevel, dict)
-                     withContext(Dispatchers.Main) {
-                         applyNewLevel(generated)
-                     }
-                 }
+                 val generated = WordGenerator.generateLevel(newStats.currentLevel, dict)
+                 applyNewLevel(generated)
              } catch (e: Exception) {
                  Log.e("GameViewModel", "Error completing level", e)
                  _uiState.value = GameUiState.Error("Error al completar nivel: ${e.message}")
