@@ -27,6 +27,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -175,8 +176,10 @@ fun GameContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 80.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp),
+            columns = GridCells.Adaptive(minSize = 110.dp),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.weight(1f)
         ) {
             items(level.targetWords) { word ->
@@ -402,7 +405,6 @@ private fun isInsideCircle(point: Offset, center: Offset, radius: Float): Boolea
 fun WordItem(word: String, isFound: Boolean, hintText: String = "") {
     Card(
         modifier = Modifier
-            .padding(4.dp)
             .height(44.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isFound) Color.White.copy(alpha = 0.9f) 
@@ -416,12 +418,19 @@ fun WordItem(word: String, isFound: Boolean, hintText: String = "") {
                 hintText.isNotEmpty() -> hintText.uppercase() + "_".repeat(word.length - hintText.length)
                 else -> "?".repeat(word.length)
             }
+
+            val fontSize = if (word.length > 8) 14.sp else 18.sp
+            val letterSpacing = if (word.length > 8) 0.5.sp else 2.sp
+
             Text(
                 text = textToShow,
-                fontSize = 18.sp,
+                fontSize = fontSize,
                 fontWeight = FontWeight.Bold,
                 color = if (isFound) Color.Black else Color.White,
-                letterSpacing = 2.sp
+                letterSpacing = letterSpacing,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Visible
             )
         }
     }
