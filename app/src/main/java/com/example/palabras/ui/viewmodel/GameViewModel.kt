@@ -6,23 +6,25 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.palabras.data.database.UserStats
 import com.example.palabras.data.repository.DictionaryRepository
+import com.example.palabras.data.repository.LevelRepository
 import com.example.palabras.data.repository.UserStatsRepository
 import com.example.palabras.domain.models.GridWord
 import com.example.palabras.domain.models.Level
 import com.example.palabras.domain.WordGenerator
-import com.example.palabras.domain.WordGenerator.Config
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import java.text.Normalizer
 
 class GameViewModel(
     private val dictionaryRepository: DictionaryRepository,
-    private val userStatsRepository: UserStatsRepository
+    private val userStatsRepository: UserStatsRepository,
+    private val levelRepository: LevelRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<GameUiState>(GameUiState.Loading)
+    private val _uiState = MutableStateFlow<GameUiState>(GameUiState.Loading(0f))
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
 
     private var currentLevel: Level? = null
@@ -51,12 +53,19 @@ class GameViewModel(
             try {
                 val dict = dictionaryRepository.loadDictionary()
                 val stats = userStatsRepository.getUserStats().first() ?: UserStats()
-                // Generar nivel según currentLevel en background para evitar bloquear la UI
-                val generated = withContext(Dispatchers.Default) {
-                    WordGenerator.generateLevel(stats.currentLevel, dict)
+                
+                // Intentar cargar de BD primero
+                var level = levelRepository.getLevel(stats.currentLevel)
+                
+                if (level == null) {
+                    // Si no existe (ej. nivel > 14 o primera vez sin cache), generar
+                    level = withContext(Dispatchers.Default) {
+                        WordGenerator.generateLevel(stats.currentLevel, dict)
+                    }
+                    levelRepository.saveLevels(listOf(level))
                 }
                 withContext(Dispatchers.Main) {
-                    applyNewLevel(generated)
+                    applyNewLevel(level!!)
                 }
             } catch (e: Exception) {
                 Log.e("GameViewModel", "Error loading game", e)
@@ -80,12 +89,23 @@ class GameViewModel(
                 )
                 userStatsRepository.updateUserStats(newStats)
 
-                // Generar nivel 1 en background para no bloquear la UI
-                val generated = withContext(Dispatchers.Default) {
-                    WordGenerator.generateLevel(1, dict)
+                // Limpiar niveles anteriores y generar lote inicial (1-14)
+                levelRepository.clearLevels()
+                
+                val levelsToGenerate = 14
+                val generatedLevels = mutableListOf<Level>()
+                
+                withContext(Dispatchers.Default) {
+                    for (i in 1..levelsToGenerate) {
+                        _uiState.value = GameUiState.Loading(i.toFloat() / levelsToGenerate)
+                        delay(50) // Pequeña pausa para permitir que la UI se actualice y se vea el progreso
+                        generatedLevels.add(WordGenerator.generateLevel(i, dict))
+                    }
+                    levelRepository.saveLevels(generatedLevels)
                 }
+
                 withContext(Dispatchers.Main) {
-                    applyNewLevel(generated)
+                    applyNewLevel(generatedLevels.first())
                 }
             } catch (e: Exception) {
                 Log.e("GameViewModel", "Error starting new game", e)
@@ -194,13 +214,19 @@ class GameViewModel(
                  userStatsRepository.updateUserStats(newStats)
                  Log.d("GameViewModel", "Nivel completado. Nuevo nivel: ${newStats.currentLevel}")
 
-                 // Generar siguiente nivel en background (Default) y luego aplicar en Main
-                 val dict = dictionaryRepository.loadDictionary()
-                 val generated = withContext(Dispatchers.Default) {
-                     WordGenerator.generateLevel(newStats.currentLevel, dict)
+                 // Cargar siguiente nivel (de BD o generar)
+                 var nextLevel = levelRepository.getLevel(newStats.currentLevel)
+                 if (nextLevel == null) {
+                     val dict = dictionaryRepository.loadDictionary()
+                     nextLevel = withContext(Dispatchers.Default) {
+                         WordGenerator.generateLevel(newStats.currentLevel, dict)
+                     }
+                     // Guardar para persistencia futura
+                     levelRepository.saveLevels(listOf(nextLevel))
                  }
+
                  withContext(Dispatchers.Main) {
-                     applyNewLevel(generated)
+                     applyNewLevel(nextLevel!!)
                  }
              } catch (e: Exception) {
                  Log.e("GameViewModel", "Error completing level", e)
@@ -211,7 +237,7 @@ class GameViewModel(
  }
 
  sealed class GameUiState {
-     object Loading : GameUiState()
+     data class Loading(val progress: Float) : GameUiState()
      data class Success(val level: Level) : GameUiState()
      data class Error(val message: String) : GameUiState()
  }
@@ -222,8 +248,14 @@ class GameViewModel(
  ) : ViewModelProvider.Factory {
      override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
          if (modelClass.isAssignableFrom(GameViewModel::class.java)) {
+             // Nota: Asumimos que AppDatabase se pasa o se obtiene aquí. 
+             // En una app real usaríamos inyección de dependencias.
+             // Aquí instanciamos el repositorio extra necesario.
+             // Usamos el contexto del repositorio
+             val db = com.example.palabras.data.database.AppDatabase.getDatabase(dictionaryRepository.context)
+             val levelRepo = LevelRepository(db.levelDao())
              @Suppress("UNCHECKED_CAST")
-             return GameViewModel(dictionaryRepository, userStatsRepository) as T
+             return GameViewModel(dictionaryRepository, userStatsRepository, levelRepo) as T
          }
          throw IllegalArgumentException("Unknown ViewModel class")
      }

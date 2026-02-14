@@ -46,13 +46,15 @@ fun GameScreen(
     val stats by viewModel.userStats.collectAsState()
     val revealedHints by viewModel.revealedHints.collectAsState()
 
-    val backgroundGradients = listOf(
-        Brush.verticalGradient(listOf(Color(0xFFB3E5FC), Color(0xFF0288D1))), // Azul intenso
-        Brush.verticalGradient(listOf(Color(0xFFC8E6C9), Color(0xFF388E3C))), // Verde intenso
-        Brush.verticalGradient(listOf(Color(0xFFFFE0B2), Color(0xFFF57C00))), // Naranja intenso
-        Brush.verticalGradient(listOf(Color(0xFFE1BEE7), Color(0xFF7B1FA2))), // Púrpura intenso
-        Brush.verticalGradient(listOf(Color(0xFFD7CCC8), Color(0xFF5D4037)))  // Tierra intenso
-    )
+    val backgroundGradients = remember {
+        listOf(
+            Brush.verticalGradient(listOf(Color(0xFFB3E5FC), Color(0xFF0288D1))), // Azul intenso
+            Brush.verticalGradient(listOf(Color(0xFFC8E6C9), Color(0xFF388E3C))), // Verde intenso
+            Brush.verticalGradient(listOf(Color(0xFFFFE0B2), Color(0xFFF57C00))), // Naranja intenso
+            Brush.verticalGradient(listOf(Color(0xFFE1BEE7), Color(0xFF7B1FA2))), // Púrpura intenso
+            Brush.verticalGradient(listOf(Color(0xFFD7CCC8), Color(0xFF5D4037)))  // Tierra intenso
+        )
+    }
 
     val currentGradient = backgroundGradients[(stats.currentLevel - 1) % backgroundGradients.size]
 
@@ -96,7 +98,18 @@ fun GameScreen(
         ) {
             when (val state = uiState) {
                 is GameUiState.Loading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator(
+                            progress = state.progress,
+                            color = Color.White,
+                            strokeCap = StrokeCap.Round
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Generando niveles... ${(state.progress * 100).toInt()}%", color = Color.White)
+                    }
                 }
                 is GameUiState.Success -> {
                     GameContent(
@@ -243,20 +256,26 @@ fun GameContent(
                 },
             contentAlignment = Alignment.TopStart
         ) {
-            // Limpiar índices inválidos ANTES de usarlos
-            val validIndices = selectedIndicesState.value.filter { it < level.letters.size }
-            if (validIndices.size != selectedIndicesState.value.size) {
-                selectedIndicesState.value = validIndices
+            // Calcular índices válidos de forma estable (sin causar recomposición infinita)
+            val currentSelected = selectedIndicesState.value
+            val validIndices = remember(currentSelected, level.letters.size) {
+                currentSelected.filter { it < level.letters.size }
+            }
+
+            // Usar SideEffect para limpiar índices inválidos sin causar recomposición infinita
+            SideEffect {
+                if (validIndices.size != currentSelected.size) {
+                    selectedIndicesState.value = validIndices
+                }
             }
 
             val lineColor = Color.White // Blanco sólido para máximo contraste
 
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val currentIndices = validIndices
-                if (currentIndices.isNotEmpty()) {
-                    for (i in 0 until currentIndices.size - 1) {
-                        val start = letterPositions[currentIndices[i]] ?: Offset.Zero
-                        val end = letterPositions[currentIndices[i + 1]] ?: Offset.Zero
+                if (validIndices.isNotEmpty()) {
+                    for (i in 0 until validIndices.size - 1) {
+                        val start = letterPositions[validIndices[i]] ?: Offset.Zero
+                        val end = letterPositions[validIndices[i + 1]] ?: Offset.Zero
                         drawLine(
                             color = lineColor,
                             start = start,
@@ -267,7 +286,7 @@ fun GameContent(
                     }
 
                     currentTouchPosition?.let { touch ->
-                        val start = letterPositions[currentIndices.last()] ?: Offset.Zero
+                        val start = letterPositions[validIndices.last()] ?: Offset.Zero
                         drawLine(
                             color = lineColor,
                             start = start,
@@ -399,10 +418,10 @@ fun WordItem(word: String, isFound: Boolean, hintText: String = "") {
             }
             Text(
                 text = textToShow,
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Black,
-                fontSize = 16.sp,
-                color = if (isFound) Color.Black else Color.White
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isFound) Color.Black else Color.White,
+                letterSpacing = 2.sp
             )
         }
     }

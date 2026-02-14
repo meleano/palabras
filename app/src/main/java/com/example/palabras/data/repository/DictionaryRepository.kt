@@ -1,26 +1,37 @@
 package com.example.palabras.data.repository
 
 import android.content.Context
+import android.util.JsonReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
+import java.io.InputStreamReader
 import java.text.Normalizer
 
-class DictionaryRepository(private val context: Context) {
+class DictionaryRepository(val context: Context) {
     private var dictionary: Set<String> = emptySet()
 
     suspend fun loadDictionary(): Set<String> = withContext(Dispatchers.IO) {
         if (dictionary.isNotEmpty()) return@withContext dictionary
 
         try {
-            val jsonString = context.assets.open("dictionary.json").bufferedReader().use { it.readText() }
-            val jsonObject = JSONObject(jsonString)
-            val jsonArray = jsonObject.getJSONArray("palabras")
             val words = mutableSetOf<String>()
-            for (i in 0 until jsonArray.length()) {
-                val raw = jsonArray.getString(i)
-                val norm = normalize(raw)
-                words.add(norm)
+            context.assets.open("dictionary.json").use { inputStream ->
+                JsonReader(InputStreamReader(inputStream, "UTF-8")).use { reader ->
+                    reader.beginObject()
+                    while (reader.hasNext()) {
+                        if (reader.nextName() == "palabras") {
+                            reader.beginArray()
+                            while (reader.hasNext()) {
+                                val raw = reader.nextString()
+                                words.add(normalize(raw))
+                            }
+                            reader.endArray()
+                        } else {
+                            reader.skipValue()
+                        }
+                    }
+                    reader.endObject()
+                }
             }
             dictionary = words
             dictionary

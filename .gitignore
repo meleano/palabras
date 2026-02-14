@@ -7,6 +7,10 @@
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
+/.idea/firebender/
+/.idea/appInsightsSettings.xml
+.vscode/
+local/
 .DS_Store
 /build
 /captures
